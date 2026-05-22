@@ -27,14 +27,14 @@ get_K_cutoff <- function(tr_dat, tree, cutoff=0.8){
 
 score_over_params <- function(genes, norm, dat, tree_id, reference_tree, parsimony_dir, xml_path, beast_path){
     #--write tree
-    tree_file <- paste0("tree_", genes, "_", norm, "_", tree_id)
-    write_tree_from_data(dat, parsimony_dir, tree_file)
-   # also get PI distance to reference tree (before running parsimony)
-   new_tree <- read.tree(paste0(parsimony_dir, tree_file, ".nwk"))
-   tree_dist <- TreeDistance(new_tree, reference_tree)
-   #--get score
-    score <- get_parsimony_score(tree_file, parsimony_dir, xml_path, beast_path)
-   #--return df
+	tree_file <- paste0("tree_", genes, "_", norm, "_", tree_id)
+	write_tree_from_data(dat, parsimony_dir, tree_file)
+	# also get PI distance to reference tree (before running parsimony)
+	new_tree <- read.tree(paste0(parsimony_dir, tree_file, ".nwk"))
+	tree_dist <- TreeDistance(new_tree, reference_tree)
+	#--get score
+	score <- get_parsimony_score(tree_file, parsimony_dir, xml_path, beast_path)
+	#--return df
     return(data.frame(norm=norm, genes=genes, tree_id=tree_id, parsimony_score=score,
         num_genes_used = nrow(dat), tree_dist = tree_dist))
 }
@@ -104,3 +104,8 @@ get_tree_dist<- function(tree_id, reference_tree_id, dir){
     # get PI dist
     return(TreeDistance(tree, ref_tree))
 }
+
+
+
+
+
