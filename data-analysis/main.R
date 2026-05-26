@@ -16,6 +16,7 @@ library(scran)
 library(scater)
 library(stats)
 library(patchwork)
+library(scTreeSim)
 theme_set(theme_bw())
 
 source("funcs.R")
@@ -190,10 +191,12 @@ sanity_counts0 <- sanity_counts
 scran_counts0 <- scran_counts
 counts0 <- counts
 
+ 
+
 run_over_cells <- function(tree, tree_id, with_K){
 
     to_keep <- tree$tip.label
-
+	ntip <- length(to_keep)
     # filter counts too
     sanity_counts <- sanity_counts0[, colnames(sanity_counts0) %in% to_keep]
     scT_counts <- scT_counts0[, colnames(scT_counts0) %in% to_keep]
@@ -234,13 +237,31 @@ run_over_cells <- function(tree, tree_id, with_K){
     res <- rbind(res, rbind(score1, rbind(score2, rbind(score3, score4))))
     }
     #------------------------------------------------------------------#
-
+	
+	# generate tree & randomly assign tip labels
+	# note: only topology matters
+	n <- 10
+	random_score <- rep(0,n)
+	random_dist <- rep(0,n)
+	samp <- ntip/2^15
+	rtree <- sim_adb_ntaxa_samp(ntip, 1, 20, 0.0, samp)@phylo
+	for (i in 1:n){
+		rtree$tip.label <- sample(unname(tree$tip.label), replace=F)	
+		write.tree(rtree, paste0(parsimony_dir, "tree_barcodes_random_", tree_id, ".nwk"))
+		random_score[i] <- get_parsimony_score(paste0("tree_barcodes_random_",tree_id), parsimony_dir, xml_path, beast_path)
+		random_dist[i] <- TreeDistance(rtree, tree)
+	}
+	random_res <- data.frame(norm="random", tree_id=tree_id, genes="none", parsimony_score =
+		median(random_score), num_genes_used = 0, tree_dist = median(random_dist))
+	res <- rbind(res, random_res)
+	
+	# sciphy reference score
     write.tree(tree, paste0(parsimony_dir, "tree_barcodes_reference_", tree_id, ".nwk"))
     reference_score <- get_parsimony_score(paste0("tree_barcodes_reference_",tree_id), parsimony_dir, xml_path, beast_path)
-    res$relative_parsimony_score <- (res$parsimony_score - reference_score)/reference_score
+	
+	res$relative_parsimony_score <- (res$parsimony_score - reference_score)/reference_score
 
     res$tree_size <- length(to_keep)
-
 
     return(res)
 }
@@ -259,12 +280,14 @@ res <- res %>%
         tree_id == "FBM" ~ "Forebrain/Midbrain/Hindbrain (15 cells)"))
 
 #---plot
+res$norm <- factor(res$norm, levels=c("random", "raw", "scT", "deconvolve", "sanity"))
+
 gg <- ggplot(res, aes(y=relative_parsimony_score, x=norm, fill=genes))+
     geom_bar(stat="identity", position=position_dodge2(width=.5, preserve="single"), col="black", linewidth=0.75, width=.5)+
     facet_wrap(~label)+
     scale_fill_brewer(palette="Blues")+
     scale_y_continuous(expand=c(0,0,0.05, 0))+
-    labs(x="Normalization", y="Relative Parsimony Score", fill="Data")
+    labs(x="Method", y="Relative Parsimony Score", fill="Data")
 #ggsave("parsimony-scores.pdf", height=6, width=12)    
 
 gg2 <- ggplot(res, aes(y=tree_dist, x=norm, fill=genes))+
@@ -272,11 +295,20 @@ gg2 <- ggplot(res, aes(y=tree_dist, x=norm, fill=genes))+
     facet_wrap(~label)+
     scale_fill_brewer(palette="Greens")+
     scale_y_continuous(expand=c(0,0,0.05, 0))+
-    labs(x="Normalization", y="CI Distance", fill="Data")
+    labs(x="Method", y="CI Distance", fill="Data")
+
 
 
 ## compare # of genes used too
+res2 <- filter(res, norm != "random") %>% group_by(norm, tree_id, label) %>%
+	summarize(prop_K = num_genes_used[genes=="K"]/num_genes_used[genes=="all"]) %>% 
+	ungroup()
 
+gg3 <- ggplot(res2, aes(y=prop_K, x=norm))+
+    geom_bar(stat="identity", position=position_dodge2(width=.5, preserve="single"), col="black", linewidth=0.75, width=0.5)+
+    facet_wrap(~label)+
+    scale_y_continuous(expand=c(0,0,0.05, 0))+
+    labs(x="Method", y="Proportion genes with K>0.95")
 
 
 
